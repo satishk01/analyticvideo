@@ -1,0 +1,13 @@
+Analyze the provided video frame and extract all relevant visual information. Please provide a detailed description that includes:
+
+1. **Scene Overview**: What is the overall setting and context of this frame?
+
+2. **Visible Text**: Are there any signs, captions, titles, or other text visible in the frame? If so, please transcribe them exactly.
+
+3. **Objects and Elements**: What objects, items, or visual elements can you identify in the frame?
+
+4. **People and Activities**: Are there people visible? What are they doing or what activities are taking place?
+
+5. **Visual Details**: Any other important visual details, colors, compositions, or notable features?
+
+Please format your response as a structured analysis covering these key areas. Be specific and detailed in your observations.

@@ -1,0 +1,8 @@
+boto3>=1.35.84
+awscli>=1.36.25
+botocore>=1.35.84
+psycopg2-binary>=2.9.9
+SQLAlchemy>=2.0.31
+pgvector>=0.3.2
+opencv-python>=4.10.0.84
+pillow>=10.4.0

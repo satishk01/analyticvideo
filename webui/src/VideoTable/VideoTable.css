@@ -1,0 +1,23 @@
+.preserve-line-breaks {
+    white-space: pre-wrap;
+}
+.page-spinner{
+    margin-top: 100px;
+}
+.chat-spinner{
+    margin-bottom: 5px;
+}
+.paragraph-with-newlines{
+    white-space: pre-line
+}
+.left-align-no-bottom-margin{
+    text-align: left;
+    margin-bottom: 0px;
+}
+.search-button{
+    margin-top: 15px;
+}
+.find-part-result{
+    text-align:left; 
+    margin-top:5px
+}
