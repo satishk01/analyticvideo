@@ -163,7 +163,7 @@ setup_nodejs_env() {
 bootstrap_cdk() {
     log_info "Bootstrapping CDK..."
     
-    if ! cdk bootstrap --app "python3 lib/app_hardcoded_auth.py" aws://$CDK_DEPLOY_ACCOUNT/$CDK_DEPLOY_REGION; then
+    if ! cdk bootstrap --app "python3 lib/app_simple.py" aws://$CDK_DEPLOY_ACCOUNT/$CDK_DEPLOY_REGION; then
         log_error "CDK bootstrap failed."
         exit 1
     fi
@@ -190,7 +190,7 @@ deploy_stack() {
     
     # Deploy CDK stack
     log_info "Deploying CDK stack..."
-    if ! cdk deploy --app "python3 lib/app_hardcoded_auth.py" --require-approval never --outputs-file $DEPLOYMENT_OUTPUT_FILE; then
+    if ! cdk deploy --app "python3 lib/app_simple.py" --require-approval never --outputs-file $DEPLOYMENT_OUTPUT_FILE; then
         log_error "CDK deployment failed."
         exit 1
     fi
@@ -284,8 +284,8 @@ check_project_structure() {
     log_info "Checking project structure..."
     
     # Check if we're in the right directory
-    if [ ! -f "lib/app_hardcoded_auth.py" ]; then
-        log_error "Cannot find lib/app_hardcoded_auth.py. Please ensure you're running this script from the project root directory."
+    if [ ! -f "lib/app_simple.py" ]; then
+        log_error "Cannot find lib/app_simple.py. Please ensure you're running this script from the project root directory."
         log_info "Expected directory structure:"
         log_info "  project-root/"
         log_info "  ├── deployment/"
