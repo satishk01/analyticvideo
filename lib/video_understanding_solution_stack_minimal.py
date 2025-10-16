@@ -1,4 +1,4 @@
-import os, json, time, base64
+import os, json
 from aws_cdk import (
     Stack,
     CfnOutput,
@@ -8,17 +8,13 @@ from aws_cdk import (
     aws_rds as _rds,
     aws_lambda as _lambda,
     aws_apigateway as _apigw,
-    aws_logs as _logs,
     aws_ssm as _ssm,
     aws_secretsmanager as _secretsmanager,
-    Duration, CfnOutput, BundlingOptions, RemovalPolicy
+    Duration, BundlingOptions, RemovalPolicy
 )
 from constructs import Construct
 
 # Configuration constants
-model_id = "anthropic.claude-3-sonnet-20240229-v1:0"
-fast_model_id = "anthropic.claude-3-haiku-20240307-v1:0"
-balanced_model_id = "anthropic.claude-3-sonnet-20240229-v1:0"
 raw_folder = "source"
 summary_folder = "summary"
 video_script_folder = "video_timeline"
@@ -28,9 +24,6 @@ entity_sentiment_folder = "entities"
 database_name = "videos"
 videos_api_resource = "videos"
 
-CONFIG_LABEL_DETECTION_ENABLED = "label_detection_enabled"
-CONFIG_TRANSCRIPTION_ENABLED = "transcription_enabled"
-
 class VideoUnderstandingSolutionStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
@@ -38,14 +31,11 @@ class VideoUnderstandingSolutionStack(Stack):
         aws_region = Stack.of(self).region
         aws_account_id = Stack.of(self).account
 
-        # Simple VPC without flow logs for demo
+        # Minimal VPC
         vpc = _ec2.Vpc(self, f"Vpc",
             ip_addresses=_ec2.IpAddresses.cidr("10.120.0.0/16"),
-            max_azs=2,  # Reduced for simplicity
-            enable_dns_support=True,
-            enable_dns_hostnames=True,
+            max_azs=2,
             nat_gateways=1,
-            vpc_name=f"{construct_id}-VPC",
             subnet_configuration=[
                 _ec2.SubnetConfiguration(
                     cidr_mask=24,
@@ -63,37 +53,28 @@ class VideoUnderstandingSolutionStack(Stack):
         private_with_egress_subnets = _ec2.SubnetSelection(subnet_type=_ec2.SubnetType.PRIVATE_WITH_EGRESS)
 
         # Configuration parameters
-        default_configuration_parameters = {
-            CONFIG_LABEL_DETECTION_ENABLED: "1",
-            CONFIG_TRANSCRIPTION_ENABLED: "1"
-        }
         configuration_parameters_ssm = _ssm.StringParameter(self, f"{construct_id}-configuration-parameters",
             parameter_name=f"{construct_id}-configuration",
-            string_value=json.dumps(default_configuration_parameters)
+            string_value=json.dumps({"label_detection_enabled": "1", "transcription_enabled": "1"})
         )
 
-        # Simple S3 Video bucket
+        # Simple S3 bucket
         video_bucket_s3 = _s3.Bucket(
             self, 
             "video-understanding", 
-            block_public_access=_s3.BlockPublicAccess.BLOCK_ALL,
             removal_policy=RemovalPolicy.DESTROY,
-            auto_delete_objects=True,  # For easy cleanup
+            auto_delete_objects=True,
             cors=[_s3.CorsRule(
                 allowed_headers=["*"],
                 allowed_methods=[_s3.HttpMethods.PUT, _s3.HttpMethods.GET, _s3.HttpMethods.HEAD, _s3.HttpMethods.POST, _s3.HttpMethods.DELETE],
                 allowed_origins=["*"],
                 max_age=3000
-            )],
-            enforce_ssl=True     
+            )]
         )
 
-        # Skip CloudWatch logging for simplicity
-
-        # Authentication Lambda with proper logging
+        # Authentication Lambda
         auth_lambda_role = _iam.Role(
             self, "AuthLambdaRole",
-            role_name=f"{construct_id}-{aws_region}-auth-lambda",
             assumed_by=_iam.ServicePrincipal("lambda.amazonaws.com"),
             managed_policies=[
                 _iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole")
@@ -102,7 +83,6 @@ class VideoUnderstandingSolutionStack(Stack):
 
         auth_lambda = _lambda.Function(
             self, "AuthLambda",
-            function_name=f"{construct_id}-auth",
             runtime=_lambda.Runtime.PYTHON_3_13,
             code=_lambda.Code.from_asset('./lib/auth_lambda',
                 bundling=BundlingOptions(
@@ -115,23 +95,19 @@ class VideoUnderstandingSolutionStack(Stack):
             ),
             handler="index.lambda_handler",
             role=auth_lambda_role,
-            timeout=Duration.minutes(1),
-            memory_size=256
+            timeout=Duration.minutes(1)
         )
 
-        # API Gateway for authentication (simplified)
+        # Simple API Gateway
         auth_api = _apigw.RestApi(
             self, "AuthAPI",
             rest_api_name=f"{construct_id}-auth-api",
-            description="Authentication API for Video Understanding Solution",
             default_cors_preflight_options=_apigw.CorsOptions(
                 allow_origins=_apigw.Cors.ALL_ORIGINS,
                 allow_methods=_apigw.Cors.ALL_METHODS,
                 allow_headers=["Content-Type", "Authorization"]
             )
         )
-
-        # Skip request validator for simplicity
 
         # Auth API resources
         auth_resource = auth_api.root.add_resource("auth")
@@ -142,54 +118,43 @@ class VideoUnderstandingSolutionStack(Stack):
         # Lambda integration
         auth_integration = _apigw.LambdaIntegration(auth_lambda)
 
-        # API methods (simplified)
+        # API methods
         login_resource.add_method("POST", auth_integration)
         logout_resource.add_method("POST", auth_integration)
         validate_resource.add_method("GET", auth_integration)
 
         # Database security group
         db_security_group = _ec2.SecurityGroup(self, "VectorDBSecurityGroup",
-            security_group_name=f"{construct_id}-vectorDB",
             vpc=vpc,
-            allow_all_outbound=False,  # More restrictive
-            description="Security group for Aurora Serverless PostgreSQL",
+            allow_all_outbound=False
         )
 
-        # Only allow PostgreSQL from within VPC
         db_security_group.add_ingress_rule(
             peer=_ec2.Peer.ipv4(vpc.vpc_cidr_block),
-            connection=_ec2.Port.tcp(5432),
-            description="PostgreSQL port from within VPC"
+            connection=_ec2.Port.tcp(5432)
         )
 
-        # Aurora cluster secret with rotation
-        aurora_cluster_username = "clusteradmin"
+        # Aurora cluster secret
         aurora_cluster_secret = _secretsmanager.Secret(self, "AuroraClusterCredentials",
-            secret_name=f"{construct_id}-vectorDB-creds",
-            description="Aurora Cluster Credentials",
             generate_secret_string=_secretsmanager.SecretStringGenerator(
                 exclude_characters="\"@/\\ '",
                 generate_string_key="password",
                 password_length=30,
                 secret_string_template=json.dumps({
-                    "username": aurora_cluster_username,
+                    "username": "clusteradmin",
                     "engine": "postgres"
                 })
             )
         )
 
-        # Skip automatic rotation for simplicity
-
-        # Aurora database with proper settings
+        # Aurora database
         db_subnet_group = _rds.SubnetGroup(self, "DBSubnetGroup",
             vpc=vpc,
-            description="Aurora subnet group",
-            vpc_subnets=private_with_egress_subnets,
-            subnet_group_name="Aurora subnet group"
+            vpc_subnets=private_with_egress_subnets
         )
 
         aurora_cluster = _rds.DatabaseCluster(self, f"{construct_id}AuroraDatabase",
-            credentials=_rds.Credentials.from_secret(aurora_cluster_secret, aurora_cluster_username),
+            credentials=_rds.Credentials.from_secret(aurora_cluster_secret, "clusteradmin"),
             engine=_rds.DatabaseClusterEngine.aurora_postgres(version=_rds.AuroraPostgresEngineVersion.VER_15_5),
             writer=_rds.ClusterInstance.serverless_v2("writer"),
             serverless_v2_min_capacity=0.5,
@@ -198,16 +163,13 @@ class VideoUnderstandingSolutionStack(Stack):
             security_groups=[db_security_group],
             vpc=vpc,
             subnet_group=db_subnet_group,
-            storage_encrypted=True,
-            deletion_protection=False,  # Disable for easy cleanup
-            iam_authentication=False,  # Disable for simplicity
+            deletion_protection=False
         )
 
-        # Video processing API (simplified)
+        # Video processing API
         video_api = _apigw.RestApi(
             self, "VideoAPI",
             rest_api_name=f"{construct_id}-video-api",
-            description="Video processing API",
             default_cors_preflight_options=_apigw.CorsOptions(
                 allow_origins=_apigw.Cors.ALL_ORIGINS,
                 allow_methods=_apigw.Cors.ALL_METHODS,
@@ -215,28 +177,9 @@ class VideoUnderstandingSolutionStack(Stack):
             )
         )
 
-        # Output important values
-        CfnOutput(self, "AuthAPIUrl", 
-            value=auth_api.url,
-            description="Authentication API URL"
-        )
-        
-        CfnOutput(self, "VideoAPIUrl",
-            value=video_api.url, 
-            description="Video API URL"
-        )
-        
-        CfnOutput(self, "S3BucketName",
-            value=video_bucket_s3.bucket_name,
-            description="S3 bucket for videos"
-        )
-        
-        CfnOutput(self, "DatabaseEndpoint",
-            value=aurora_cluster.cluster_endpoint.hostname,
-            description="Aurora database endpoint"
-        )
-
-        CfnOutput(self, "WebAppCredentials",
-            value="Username: admin, Password: admin",
-            description="Hardcoded login credentials"
-        )
+        # Outputs
+        CfnOutput(self, "AuthAPIUrl", value=auth_api.url)
+        CfnOutput(self, "VideoAPIUrl", value=video_api.url)
+        CfnOutput(self, "S3BucketName", value=video_bucket_s3.bucket_name)
+        CfnOutput(self, "DatabaseEndpoint", value=aurora_cluster.cluster_endpoint.hostname)
+        CfnOutput(self, "WebAppCredentials", value="Username: admin, Password: admin")

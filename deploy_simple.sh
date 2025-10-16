@@ -112,11 +112,11 @@ deploy_solution() {
     
     # Bootstrap CDK if needed
     log_info "Bootstrapping CDK..."
-    cdk bootstrap --app "python3 lib/app_simple.py" aws://$CDK_DEPLOY_ACCOUNT/$CDK_DEPLOY_REGION
+    cdk bootstrap --app "python3 lib/app_minimal.py" aws://$CDK_DEPLOY_ACCOUNT/$CDK_DEPLOY_REGION
     
     # Deploy the stack
     log_info "Deploying CDK stack..."
-    cdk deploy --app "python3 lib/app_simple.py" --require-approval never --outputs-file $DEPLOYMENT_OUTPUT_FILE
+    cdk deploy --app "python3 lib/app_minimal.py" --require-approval never --outputs-file $DEPLOYMENT_OUTPUT_FILE
     
     log_success "Deployment complete!"
 }

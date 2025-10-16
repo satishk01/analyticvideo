@@ -113,7 +113,7 @@ disable_rds_protection() {
 destroy_stack() {
     log_info "Destroying CDK stack..."
     
-    if cdk destroy --app "python3 lib/app_simple.py" --force; then
+    if cdk destroy --app "python3 lib/app_minimal.py" --force; then
         log_success "CDK stack destroyed successfully."
     else
         log_error "CDK stack destruction failed."
