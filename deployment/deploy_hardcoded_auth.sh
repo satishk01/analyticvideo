@@ -175,6 +175,12 @@ bootstrap_cdk() {
 deploy_stack() {
     log_info "Building and deploying the Video Understanding Solution..."
     
+    # Check if webui directory exists
+    if [ ! -d "webui" ]; then
+        log_error "webui directory not found. Please ensure you're running this script from the project root directory."
+        exit 1
+    fi
+    
     # Prepare web UI
     log_info "Preparing web UI..."
     cd webui
@@ -273,6 +279,35 @@ cleanup_on_error() {
     exit 1
 }
 
+# Function to check project structure
+check_project_structure() {
+    log_info "Checking project structure..."
+    
+    # Check if we're in the right directory
+    if [ ! -f "lib/app_hardcoded_auth.py" ]; then
+        log_error "Cannot find lib/app_hardcoded_auth.py. Please ensure you're running this script from the project root directory."
+        log_info "Expected directory structure:"
+        log_info "  project-root/"
+        log_info "  ├── deployment/"
+        log_info "  ├── lib/"
+        log_info "  ├── webui/"
+        log_info "  └── ..."
+        exit 1
+    fi
+    
+    if [ ! -d "webui" ]; then
+        log_error "webui directory not found. Please ensure the webui directory exists in the project root."
+        exit 1
+    fi
+    
+    if [ ! -f "webui/package.json" ]; then
+        log_error "webui/package.json not found. Please ensure the webui directory is properly set up."
+        exit 1
+    fi
+    
+    log_success "Project structure verified."
+}
+
 # Main deployment function
 main() {
     log_info "Starting Video Understanding Solution deployment with hardcoded authentication..."
@@ -282,6 +317,7 @@ main() {
     trap cleanup_on_error ERR
     
     # Run deployment steps
+    check_project_structure
     check_prerequisites
     validate_aws_setup
     setup_python_env
