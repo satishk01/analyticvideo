@@ -163,7 +163,7 @@ setup_nodejs_env() {
 bootstrap_cdk() {
     log_info "Bootstrapping CDK..."
     
-    if ! cdk bootstrap aws://$CDK_DEPLOY_ACCOUNT/$CDK_DEPLOY_REGION; then
+    if ! cdk bootstrap --app "python3 lib/app_hardcoded_auth.py" aws://$CDK_DEPLOY_ACCOUNT/$CDK_DEPLOY_REGION; then
         log_error "CDK bootstrap failed."
         exit 1
     fi

@@ -269,7 +269,62 @@ chmod +x setup_project.sh
 
 ---
 
-### Issue 10: "CDK deployment failed"
+### Issue 10: "cannot import name 'aws_amplify_alpha'"
+
+**Error Message:**
+```
+ImportError: cannot import name 'aws_amplify_alpha' from 'aws_cdk'
+python3 ./lib/app.py: Subprocess exited with error 1
+[ERROR] CDK bootstrap failed.
+```
+
+**Cause:** The deployment is trying to use the original CDK stack which imports aws_amplify_alpha, instead of our hardcoded auth version.
+
+**Solutions:**
+
+#### Option A: Run the fix script (Recommended)
+```bash
+chmod +x fix_deployment_issue.sh
+./fix_deployment_issue.sh
+
+# Then run deployment
+./deployment/deploy_hardcoded_auth.sh
+```
+
+#### Option B: Manual fix
+```bash
+# 1. Clean up Python environment
+rm -rf venv/
+python3 -m venv venv
+source venv/bin/activate
+
+# 2. Install only required packages
+pip install --upgrade pip
+pip install --upgrade "aws-cdk-lib>=2.122.0"
+pip install --upgrade "cdk-nag>=2.28.16"
+pip install --upgrade boto3
+
+# 3. Remove problematic packages
+pip uninstall -y aws-cdk.aws-amplify-alpha 2>/dev/null || true
+
+# 4. Use correct CDK app
+export CDK_DEPLOY_ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+export CDK_DEPLOY_REGION=$(aws configure get region)
+cdk bootstrap --app "python3 lib/app_hardcoded_auth.py" aws://$CDK_DEPLOY_ACCOUNT/$CDK_DEPLOY_REGION
+```
+
+#### Option C: Verify correct files
+```bash
+# Make sure you're using the hardcoded auth version files
+ls -la lib/app_hardcoded_auth.py
+ls -la lib/video_understanding_solution_stack_hardcoded_auth.py
+
+# These files should exist and not import aws_amplify_alpha
+```
+
+---
+
+### Issue 11: "CDK deployment failed"
 
 **Error Message:**
 ```
